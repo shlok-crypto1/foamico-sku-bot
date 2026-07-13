@@ -100,6 +100,7 @@
   .tag.model{background:var(--key-black);color:var(--egg)}
   .tag.spec{background:var(--calm);color:var(--avocado)}
   .tag.custom{background:#efe7d0;color:#8a6d12}
+  .tag.upgraded{background:var(--calm);color:var(--avocado)}
   .skuline{font-size:12.5px;font-weight:600;color:var(--avocado);background:var(--calm);
     border:1px solid #d3e3af;border-radius:6px;padding:3px 9px;display:inline-block}
   .skuline strong{color:var(--key-black);font-weight:700}
@@ -358,6 +359,27 @@ function parseQty(line,size){
 function parseSize(l){const m=l.match(/(\d{2,3}(?:\.\d+)?)\s*[x×*]\s*(\d{2,3}(?:\.\d+)?)/i);
   if(!m)return null;return{a:parseFloat(m[1]),b:parseFloat(m[2]),index:m.index,len:m[0].length};}
 function stdKey(a,b){const k1=a+'x'+b,k2=b+'x'+a;if(PRICES[k1])return k1;if(PRICES[k2])return k2;return null;}
+/* all standard dimension values that appear anywhere in the price sheet, e.g. [30,36,42,48,60,66,72,75,78,84] */
+const STD_SIZES=[...new Set(Object.keys(PRICES).flatMap(k=>k.split('x').map(Number)))].sort((a,b)=>a-b);
+/* odd size not in the sheet: find the smallest standard (a',b') pair with a'>=a, b'>=b that exists in PRICES */
+function findUpgrade(a,b){
+  const aC=STD_SIZES.filter(s=>s>=a),bC=STD_SIZES.filter(s=>s>=b);
+  let best=null;
+  for(const av of aC)for(const bv of bC){
+    const key=stdKey(av,bv);
+    if(key&&(!best||(av+bv)<best.sum))best={key,sum:av+bv};
+  }
+  return best;
+}
+/* resolve a size (possibly odd) to a price: exact catalog match, else upgrade to next standard size, else per-sq-ft */
+function priceForSize(a,b,col){
+  const key=stdKey(a,b);
+  if(key)return{sizeLabel:key.replace('x','×'),custom:false,upgraded:false,unit:PRICES[key][col.i]};
+  const up=findUpgrade(a,b);
+  if(up)return{sizeLabel:up.key.replace('x','×'),custom:false,upgraded:true,origSize:a+'×'+b,unit:PRICES[up.key][col.i]};
+  const sqin=a*b,sqft=sqin/144,unit=Math.round(sqft*col.r);
+  return{sizeLabel:a+'×'+b,custom:true,upgraded:false,rate:col.r,sqin,sqft,unit};
+}
 function parseModel(l){l=l.toLowerCase();for(const m of MODELS)if(l.includes(m.toLowerCase()))return m;
   if(/eco\s*lu|eco\s*lite|\beco\b/.test(l))return'Ecolite';return null;}
 function parseVariant(l){l=l.toLowerCase();let m;
@@ -396,13 +418,10 @@ function matchLine(raw){
       return{kind:'mattress',src:raw.trim(),ok:false,msgKey:'askThickness',model,variant,opts:ts.map(thick).join(' / ')};}
     const opts=c.map(x=>x.v+' '+thick(x.t)).join(' · ');
     return{kind:'mattress',src:raw.trim(),ok:false,msgKey:'ambiguous',opts};}
-  const col=c[0],key=stdKey(size.a,size.b);
-  if(key){const unit=PRICES[key][col.i];
-    return{kind:'mattress',src:raw.trim(),ok:true,model:col.m,variant:col.v,thickness:col.t,
-      sizeLabel:key.replace('x','×'),custom:false,qty,unit,total:unit*qty};}
-  const sqin=size.a*size.b,sqft=sqin/144,unit=Math.round(sqft*col.r);
+  const col=c[0],p=priceForSize(size.a,size.b,col);
   return{kind:'mattress',src:raw.trim(),ok:true,model:col.m,variant:col.v,thickness:col.t,
-    sizeLabel:size.a+'×'+size.b,custom:true,rate:col.r,sqin,sqft,qty,unit,total:unit*qty};
+    sizeLabel:p.sizeLabel,custom:p.custom,upgraded:p.upgraded,origSize:p.origSize,
+    rate:p.rate,sqin:p.sqin,sqft:p.sqft,qty,unit:p.unit,total:p.unit*qty};
 }
 
 /* ================= i18n ================= */
@@ -419,17 +438,18 @@ const T={
    summary:'Summary',copy:'Copy summary',foot:'FOAMICO · SKU Price Summary · MRP (incl. GST) · Confidential',
    thPill:'Product',thQty:'Qty',thUnit:'Unit MRP',thTotal:'Line total',
    grand:'Grand total (MRP, incl. GST)',item:'item',items:'items',priced:'priced',need:'need detail',
-   needTag:'Needs detail',pillowTag:'Pillow',custom:'custom',inches:'Inches',copied:'Copied ✓',
+   needTag:'Needs detail',pillowTag:'Pillow',custom:'custom',upgraded:'upgraded',inches:'Inches',copied:'Copied ✓',
+   upgradeNote:(from,to)=>`Odd size ${from} upgraded to nearest standard size ${to} (standard price used).`,
    emptyStart:'Your priced summary will appear here.',emptyNone:'Add products above to see your priced summary.',
    cleared:'Cleared.',
    calc:(a,b,si,sf,r,u)=>`${a}×${b} = ${inr(si)} sq in ÷ 144 = ${sf.toFixed(2)} sq ft × ₹${inr(r)}/sq ft = ₹${inr(u)}`,
    msg:{noProduct:'Product not recognised. Add a model name (Resto, Ultima…) or a pillow name (Cloud, Memo-Rest…).',
-     noSize:'Missing size. Add it as e.g. 75x60 (or 75.5x67.5 for a custom size).',
+     noSize:'Missing size. Add it as e.g. 75x60 (or 75.5x67.5 for an odd size — auto-upgraded to the nearest standard size).',
      noVariant:'No matching variant / thickness for this model. Check the variant & thickness.',
      ambiguous:o=>'Please specify variant &/or thickness. Options: '+o,
      askVariant:(m,t,o)=>m+' '+t+' comes as '+o+' — please add the variant name.',
      askThickness:(m,v,o)=>m+' '+v+' comes in '+o+' — please add the thickness.'},
-   egs:[['Standard mattress','Ultima Premium 72x60'],['Custom size','Resto Luxury 75.5x67.5'],
+   egs:[['Standard mattress','Ultima Premium 72x60'],['Odd size (auto-upgraded)','Resto Luxury 75.5x67.5'],
         ['With quantity','Duro Premium 78x72 x3'],
         ['Mixed list','Sova Luxury 75x60\nSignature Premium 5" 72x60 5\nCloud Pro x4\nMattress Protector x2']],
    copyTitle:'FOAMICO — SKU Price Summary (MRP incl. GST)'},
@@ -445,17 +465,18 @@ const T={
    summary:'सारांश',copy:'सारांश कॉपी करें',foot:'FOAMICO · SKU मूल्य सारांश · MRP (GST सहित) · गोपनीय',
    thPill:'उत्पाद',thQty:'मात्रा',thUnit:'प्रति नग MRP',thTotal:'लाइन कुल',
    grand:'कुल जोड़ (MRP, GST सहित)',item:'नग',items:'नग',priced:'की कीमत लगी',need:'में जानकारी चाहिए',
-   needTag:'जानकारी चाहिए',pillowTag:'तकिया',custom:'कस्टम',inches:'इंच',copied:'कॉपी हो गया ✓',
+   needTag:'जानकारी चाहिए',pillowTag:'तकिया',custom:'कस्टम',upgraded:'अपग्रेडेड',inches:'इंच',copied:'कॉपी हो गया ✓',
+   upgradeNote:(from,to)=>`साइज़ ${from} को नज़दीकी स्टैंडर्ड साइज़ ${to} में अपग्रेड किया गया (स्टैंडर्ड कीमत लागू)।`,
    emptyStart:'आपका कीमत-सहित सारांश यहाँ दिखेगा।',emptyNone:'ऊपर प्रोडक्ट जोड़ें — यहाँ कीमत-सहित सारांश दिखेगा।',
    cleared:'साफ़ हो गया।',
    calc:(a,b,si,sf,r,u)=>`${a}×${b} = ${inr(si)} वर्ग इंच ÷ 144 = ${sf.toFixed(2)} वर्ग फुट × ₹${inr(r)}/वर्ग फुट = ₹${inr(u)}`,
    msg:{noProduct:'प्रोडक्ट पहचान नहीं पाया। मॉडल नाम (रेस्टो, अल्टिमा…) या तकिया नाम (क्लाउड, मेमो-रेस्ट…) डालें।',
-     noSize:'साइज़ नहीं मिला। जैसे 75x60 लिखें (कस्टम के लिए 75.5x67.5)।',
+     noSize:'साइज़ नहीं मिला। जैसे 75x60 लिखें (75.5x67.5 जैसे साइज़ को नज़दीकी स्टैंडर्ड साइज़ में अपने-आप अपग्रेड किया जाएगा)।',
      noVariant:'इस मॉडल के लिए वेरिएंट / मोटाई मेल नहीं खाई। वेरिएंट और मोटाई जाँचें।',
      ambiguous:o=>'कृपया वेरिएंट और/या मोटाई बताएँ। विकल्प: '+o,
      askVariant:(m,t,o)=>m+' '+t+' में '+o+' दोनों आते हैं — कृपया वेरिएंट बताएँ।',
      askThickness:(m,v,o)=>m+' '+v+' '+o+' दोनों में आता है — कृपया मोटाई बताएँ।'},
-   egs:[['सामान्य गद्दा','Ultima Premium 72x60'],['कस्टम साइज़','रेस्टो लक्ज़री 75.5x67.5'],
+   egs:[['सामान्य गद्दा','Ultima Premium 72x60'],['अपग्रेडेड साइज़','रेस्टो लक्ज़री 75.5x67.5'],
         ['मात्रा के साथ','ड्यूरो प्रीमियम 78x72 x3'],
         ['मिली-जुली सूची','सोवा लक्ज़री 75x60\nसिग्नेचर प्रीमियम 72x60 5\nक्लाउड प्रो x4\nमैट्रेस प्रोटेक्टर x2']],
    copyTitle:'FOAMICO — SKU मूल्य सारांश (MRP, GST सहित)'}
@@ -514,11 +535,10 @@ function addItem(){
     if(!sizeStr)return err(t.errSize);
     const size=parseSize(normalize(sizeStr));
     if(!size)return err(t.errSizeBad);
-    const col=COLS[+ci],key=stdKey(size.a,size.b);
-    if(key){const unit=PRICES[key][+ci];
-      item={kind:'mattress',ok:true,model:col.m,variant:col.v,thickness:col.t,sizeLabel:key.replace('x','×'),custom:false,qty,unit,total:unit*qty};}
-    else{const sqin=size.a*size.b,sqft=sqin/144,unit=Math.round(sqft*col.r);
-      item={kind:'mattress',ok:true,model:col.m,variant:col.v,thickness:col.t,sizeLabel:size.a+'×'+size.b,custom:true,rate:col.r,sqin,sqft,qty,unit,total:unit*qty};}
+    const col={...COLS[+ci],i:+ci},p=priceForSize(size.a,size.b,col);
+    item={kind:'mattress',ok:true,model:col.m,variant:col.v,thickness:col.t,
+      sizeLabel:p.sizeLabel,custom:p.custom,upgraded:p.upgraded,origSize:p.origSize,
+      rate:p.rate,sqin:p.sqin,sqft:p.sqft,qty,unit:p.unit,total:p.unit*qty};
   }
   items.push(item);renderList();draw(items);
   document.getElementById('bSize').value='';document.getElementById('bQty').value='1';
@@ -528,7 +548,7 @@ function renderList(){
   const t=T[LANG],w=document.getElementById('listWrap');
   if(!items.length){w.innerHTML='<div class="li-empty">'+t.listEmpty+'</div>';return;}
   w.innerHTML=items.map((r,idx)=>{
-    const label=r.kind==='pillow'?r.name+' ('+r.cat+')':skuLabel(r,t.inches)+(r.custom?' · '+t.custom:'');
+    const label=r.kind==='pillow'?r.name+' ('+r.cat+')':skuLabel(r,t.inches)+(r.custom?' · '+t.custom:r.upgraded?' · '+t.upgraded:'');
     return '<div class="li-item"><div class="li-main"><span class="q">'+r.qty+'×</span>'+esc(label)+'</div>'+
            '<button class="li-rm" data-idx="'+idx+'" aria-label="remove">✕</button></div>';
   }).join('');
@@ -561,9 +581,10 @@ function draw(rows){
       }else{
         interp='<span class="skuline"><strong>'+esc(r.model)+'</strong> '+
                esc(r.variant+' '+r.sizeLabel+', '+r.thickness+' '+t.inches)+'</span>'+
-               (r.custom?'<span class="tag custom">'+t.custom+'</span>':'');
+               (r.custom?'<span class="tag custom">'+t.custom+'</span>':r.upgraded?'<span class="tag upgraded">'+t.upgraded+'</span>':'');
       }
-      const note=r.custom?'<div class="note">'+esc(t.calc(r.sizeLabel.split('×')[0],r.sizeLabel.split('×')[1],r.sqin,r.sqft,r.rate,r.unit))+'</div>':'';
+      const note=r.custom?'<div class="note">'+esc(t.calc(r.sizeLabel.split('×')[0],r.sizeLabel.split('×')[1],r.sqin,r.sqft,r.rate,r.unit))+'</div>':
+        r.upgraded?'<div class="note">'+esc(t.upgradeNote(r.origSize,r.sizeLabel))+'</div>':'';
       body+='<tr><td><div class="tags">'+interp+'</div>'+note+'</td>'+
             '<td class="num">'+r.qty+'</td><td class="num">₹'+inr(r.unit)+'</td>'+
             '<td class="num price-strong">₹'+inr(r.total)+'</td></tr>';
@@ -587,7 +608,7 @@ function draw(rows){
   // plain text copy
   let txt=t.copyTitle+'\n\n';
   rows.forEach(r=>{if(r.ok){const d=r.kind==='pillow'?r.name+' ('+r.cat+')':
-      skuLabel(r,t.inches)+(r.custom?' ['+t.custom+']':'');
+      skuLabel(r,t.inches)+(r.custom?' ['+t.custom+']':r.upgraded?' ['+t.upgraded+' '+r.origSize+'→'+r.sizeLabel+']':'');
     txt+=`${r.qty} × ${d}  @ ₹${inr(r.unit)}  = ₹${inr(r.total)}\n`;}
     else{const M=t.msg;let msg;
       if(r.msgKey==='ambiguous')msg=M.ambiguous(r.opts);
