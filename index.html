@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -99,6 +100,9 @@
   .tag.model{background:var(--key-black);color:var(--egg)}
   .tag.spec{background:var(--calm);color:var(--avocado)}
   .tag.custom{background:#efe7d0;color:#8a6d12}
+  .skuline{font-size:12.5px;font-weight:600;color:var(--avocado);background:var(--calm);
+    border:1px solid #d3e3af;border-radius:6px;padding:3px 9px;display:inline-block}
+  .skuline strong{color:var(--key-black);font-weight:700}
   .note{font-size:11.5px;color:var(--slate);margin-top:6px;font-style:italic}
   .price-strong{font-weight:600;color:var(--key-black)}
   tr.flag td{background:#faf6ec}
@@ -117,6 +121,30 @@
   .empty{color:var(--sand);font-size:13px;padding:6px 2px}
   .foot{margin-top:34px;font-size:10.5px;color:var(--sand);text-align:center;font-family:var(--head);letter-spacing:.06em}
   .hidden{display:none}
+
+  /* ===== structured builder ===== */
+  .builder{display:grid;grid-template-columns:1.3fr 1.7fr 1fr .7fr auto;gap:10px;align-items:end}
+  .fld{display:flex;flex-direction:column;gap:5px;min-width:0}
+  .fld-lbl{font-size:10.5px;text-transform:uppercase;letter-spacing:.1em;color:var(--sand);font-weight:600}
+  .fld select,.fld input{font-family:var(--body);font-size:14px;color:var(--key-black);background:var(--paper);
+    border:1px solid var(--light-grey);border-radius:10px;padding:11px 12px;width:100%;height:44px}
+  .fld select:focus,.fld input:focus{outline:none;border-color:var(--kiwi);box-shadow:0 0 0 3px var(--calm)}
+  .fld select:disabled,.fld input:disabled{opacity:.45;cursor:not-allowed;background:var(--mist)}
+  .fld-add{white-space:nowrap;height:44px;padding:0 22px}
+  .builder-err{min-height:18px;margin:10px 0 0;font-size:12.5px;color:#9d3d27;font-weight:600}
+  #listWrap{margin-top:6px}
+  .li-item{display:flex;align-items:center;gap:10px;justify-content:space-between;padding:10px 12px;
+    border:1px solid var(--light-grey);border-radius:10px;background:var(--paper);margin-top:8px}
+  .li-main{font-size:13.5px;color:var(--key-black)}
+  .li-main .q{font-family:var(--head);font-weight:700;color:var(--avocado);margin-right:8px}
+  .li-rm{border:none;background:transparent;color:var(--slate);cursor:pointer;font-size:16px;line-height:1;
+    padding:4px 8px;border-radius:6px;flex:none}
+  .li-rm:hover{background:var(--calm);color:var(--key-black)}
+  .li-empty{color:var(--sand);font-size:13px;padding:8px 2px}
+  @media(max-width:640px){
+    .builder{grid-template-columns:1fr 1fr}
+    .fld-model,.fld-thk,.fld-add{grid-column:1 / -1}
+  }
 
   @media(max-width:640px){ .wordmark{font-size:24px} }
 </style>
@@ -139,20 +167,30 @@
   <p class="sub" data-i="sub"></p>
 
   <div class="card">
-    <h2 data-i="yourList">Your list</h2>
-    <textarea id="input" spellcheck="false"></textarea>
-    <div class="row">
-      <button class="btn btn-primary" id="run" data-i="run">Get summary</button>
-      <button class="btn btn-ghost btn-mic" id="mic" type="button" aria-pressed="false">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Zm5-3a1 1 0 1 1 2 0 7 7 0 0 1-6 6.93V21h3a1 1 0 1 1 0 2H8a1 1 0 1 1 0-2h3v-3.07A7 7 0 0 1 5 11a1 1 0 1 1 2 0 5 5 0 0 0 10 0Z"/></svg>
-        <span data-i="speak">Speak</span>
-      </button>
-      <button class="btn btn-ghost" id="clear" data-i="clear">Clear</button>
-      <p class="voice-status" id="voiceStatus" role="status" aria-live="polite"></p>
+    <h2 data-i="yourList">Build your list</h2>
+    <div class="builder">
+      <label class="fld fld-model">
+        <span class="fld-lbl" data-i="fModel">Model</span>
+        <select id="bModel"></select>
+      </label>
+      <label class="fld fld-thk">
+        <span class="fld-lbl" data-i="fThk">Variant / Thickness</span>
+        <select id="bThk" disabled></select>
+      </label>
+      <label class="fld fld-size">
+        <span class="fld-lbl" data-i="fSize">Size</span>
+        <input id="bSize" type="text" autocomplete="off" spellcheck="false" placeholder="72x72" disabled />
+      </label>
+      <label class="fld fld-qty">
+        <span class="fld-lbl" data-i="fQty">Qty</span>
+        <input id="bQty" type="number" min="1" step="1" value="1" inputmode="numeric" />
+      </label>
+      <button class="btn btn-primary fld-add" id="bAdd" data-i="add">+ Add</button>
     </div>
-    <div class="examples">
-      <div class="lbl" data-i="egLbl">Tap to load an example</div>
-      <div id="egchips"></div>
+    <p class="builder-err" id="bErr" role="alert"></p>
+    <div id="listWrap"></div>
+    <div class="row">
+      <button class="btn btn-ghost" id="clear" data-i="clearAll">Clear all</button>
     </div>
   </div>
 
@@ -282,13 +320,16 @@ function normalize(line){
   s=s.replace(/[०-९]/g,d=>HINDI_DIGITS[d]);      // Hindi digits -> 0-9
   DEVA_MAP.forEach(([re,rep])=>{ s=s.replace(re,rep); });
   s=s.replace(/\bby\b/gi,' x ');
-  return wordsToNumbers(s).replace(/\s+/g,' ').trim();
+  s=wordsToNumbers(s).replace(/(\d)\s*(?:inches|inch|ins|in)\b/gi,'$1 '); // drop inch units, keep the number
+  return s.replace(/\s+/g,' ').trim();
 }
 
 /* ===== helpers ===== */
 function inr(n){n=Math.round(n);const s=String(n);if(s.length<=3)return s;const l=s.slice(-3);
   let r=s.slice(0,-3).replace(/\B(?=(\d{2})+(?!\d))/g,',');return r+','+l;}
 function thick(t){return t+'"';}
+/* canonical, input-independent label: "Model Variant Size, Thickness Inches" */
+function skuLabel(r,unit){return r.model+' '+r.variant+' '+r.sizeLabel+', '+r.thickness+' '+unit;}
 
 /* ===== parsing (operates on normalised text) ===== */
 function parseQty(line,size){
@@ -320,7 +361,7 @@ function stdKey(a,b){const k1=a+'x'+b,k2=b+'x'+a;if(PRICES[k1])return k1;if(PRIC
 function parseModel(l){l=l.toLowerCase();for(const m of MODELS)if(l.includes(m.toLowerCase()))return m;
   if(/eco\s*lu|eco\s*lite|\beco\b/.test(l))return'Ecolite';return null;}
 function parseVariant(l){l=l.toLowerCase();let m;
-  if((m=l.match(/r\s*-?\s*(1000|2000|3000)/)))return'R'+m[1];
+  if((m=l.match(/(?:r\s*-?\s*)?(1000|2000|3000)(?!\d)/)))return'R'+m[1];
   if(/\bnatural\b|\bnat\b/.test(l))return'Natural';
   if(/\bluxur/.test(l))return'Luxury';
   if(/\bpremium\b|\bprem\b/.test(l))return'Premium';
@@ -339,7 +380,9 @@ function matchLine(raw){
       return{kind:'pillow',src:raw.trim(),ok:true,name:p.name,cat:p.cat,qty,unit:p.mrp,total:p.mrp*qty};
     return{kind:'none',src:raw.trim(),ok:false,msgKey:'noProduct'};
   }
-  const variant=parseVariant(line),thickness=parseThickness(tWork);
+  const variant=parseVariant(line);
+  // Riva variant codes (1000/2000/3000) must not be misread as a thickness (e.g. "10" out of "1000")
+  const thickness=parseThickness(tWork.replace(/(?:r\s*-?\s*)?(?:1000|2000|3000)(?!\d)/gi,' '));
   let c=COLS.map((x,i)=>({...x,i})).filter(x=>x.m===model);
   if(variant)c=c.filter(x=>x.v.toLowerCase()===variant.toLowerCase());
   if(thickness!=null)c=c.filter(x=>x.t===thickness);
@@ -366,18 +409,19 @@ function matchLine(raw){
 const T={
  en:{kicker:'From the house of LPPL · Price List 2026',
    title:'SKU Price Summary',
-   sub:'Paste or speak your products — one per line — and get a priced summary with a grand total. Works in English, Hindi and Hinglish, with natural quantities such as “four pieces”.',
-   yourList:'Your list',run:'Get summary',speak:'Speak',stopListening:'Stop',clear:'Clear',egLbl:'Tap to load an example',
-   listening:'Listening… speak naturally in English, Hindi or Hinglish.',processingVoice:'Processing voice input…',
-   voiceReady:'Voice input added. Edit it or get the summary again.',voiceUnsupported:'Voice input is not supported in this browser. Try Chrome or Edge.',
-   voiceDenied:'Microphone access was blocked. Allow microphone access and try again.',voiceError:'Voice input could not be captured. Please try again.',
+   sub:'Pick a model and variant, type the size and quantity, and add each product to your list for an instant priced summary with a grand total.',
+   yourList:'Build your list',clear:'Clear',
+   fModel:'Model',fThk:'Variant / Thickness',fSize:'Size',fQty:'Qty',add:'+ Add',clearAll:'Clear all',
+   selModel:'Select model…',selThk:'Select…',grpMattress:'Mattresses',grpPillow:'Pillows & Accessories',
+   fixedPrice:'Fixed price',sizePh:'e.g. 72x72',listEmpty:'No items yet — add products above.',
+   errModel:'Please choose a model.',errThk:'Please choose the variant / thickness.',
+   errSize:'Please enter a size, e.g. 72x72.',errSizeBad:'Size not understood. Use e.g. 72x72 or 75.5x67.5.',
    summary:'Summary',copy:'Copy summary',foot:'FOAMICO · SKU Price Summary · MRP (incl. GST) · Confidential',
-   placeholder:'e.g.\nUltima Premium 72x60\nResto Luxury 75.5x67.5\nDuro Premium 78x72 x3\nCloud Pro x4\nMattress Protector x2',
-   thPill:'Line & interpretation',thQty:'Qty',thUnit:'Unit MRP',thTotal:'Line total',
+   thPill:'Product',thQty:'Qty',thUnit:'Unit MRP',thTotal:'Line total',
    grand:'Grand total (MRP, incl. GST)',item:'item',items:'items',priced:'priced',need:'need detail',
-   needTag:'Needs detail',pillowTag:'Pillow',custom:'custom',copied:'Copied ✓',
-   emptyStart:'Your priced summary will appear here.',emptyNone:'Nothing to price yet — paste some SKUs above and tap “Get summary”.',
-   cleared:'Cleared. Paste a new list to price it.',
+   needTag:'Needs detail',pillowTag:'Pillow',custom:'custom',inches:'Inches',copied:'Copied ✓',
+   emptyStart:'Your priced summary will appear here.',emptyNone:'Add products above to see your priced summary.',
+   cleared:'Cleared.',
    calc:(a,b,si,sf,r,u)=>`${a}×${b} = ${inr(si)} sq in ÷ 144 = ${sf.toFixed(2)} sq ft × ₹${inr(r)}/sq ft = ₹${inr(u)}`,
    msg:{noProduct:'Product not recognised. Add a model name (Resto, Ultima…) or a pillow name (Cloud, Memo-Rest…).',
      noSize:'Missing size. Add it as e.g. 75x60 (or 75.5x67.5 for a custom size).',
@@ -391,18 +435,19 @@ const T={
    copyTitle:'FOAMICO — SKU Price Summary (MRP incl. GST)'},
  hi:{kicker:'LPPL के घराने से · मूल्य सूची 2026',
    title:'SKU मूल्य सारांश',
-   sub:'अपने प्रोडक्ट एक-एक लाइन में लिखें या बोलें — तुरंत कीमत और कुल जोड़ मिलेगा। हिंदी, अंग्रेज़ी और हिंग्लिश में “चार पीस” जैसी स्वाभाविक मात्रा भी समझी जाती है।',
-   yourList:'आपकी सूची',run:'कीमत निकालें',speak:'बोलें',stopListening:'रोकें',clear:'साफ़ करें',egLbl:'उदाहरण लोड करने के लिए टैप करें',
-   listening:'सुन रहा है… हिंदी, अंग्रेज़ी या हिंग्लिश में बोलें।',processingVoice:'आवाज़ को समझ रहा है…',
-   voiceReady:'बोला हुआ टेक्स्ट जोड़ दिया गया है। इसे संपादित करें या फिर से कीमत निकालें।',voiceUnsupported:'इस ब्राउज़र में आवाज़ से लिखने की सुविधा उपलब्ध नहीं है। Chrome या Edge आज़माएँ।',
-   voiceDenied:'माइक्रोफ़ोन की अनुमति नहीं मिली। अनुमति देकर फिर कोशिश करें।',voiceError:'आवाज़ साफ़ नहीं मिली। कृपया फिर कोशिश करें।',
+   sub:'मॉडल और वेरिएंट चुनें, साइज़ और मात्रा लिखें, और हर प्रोडक्ट को सूची में जोड़ें — तुरंत कीमत-सहित सारांश और कुल जोड़ पाएँ।',
+   yourList:'अपनी सूची बनाएँ',clear:'साफ़ करें',
+   fModel:'मॉडल',fThk:'वेरिएंट / मोटाई',fSize:'साइज़',fQty:'मात्रा',add:'+ जोड़ें',clearAll:'सब हटाएँ',
+   selModel:'मॉडल चुनें…',selThk:'चुनें…',grpMattress:'गद्दे',grpPillow:'तकिए और सहायक',
+   fixedPrice:'निर्धारित मूल्य',sizePh:'जैसे 72x72',listEmpty:'अभी कोई आइटम नहीं — ऊपर से प्रोडक्ट जोड़ें।',
+   errModel:'कृपया मॉडल चुनें।',errThk:'कृपया वेरिएंट / मोटाई चुनें।',
+   errSize:'कृपया साइज़ डालें, जैसे 72x72।',errSizeBad:'साइज़ समझ नहीं आया। जैसे 72x72 या 75.5x67.5।',
    summary:'सारांश',copy:'सारांश कॉपी करें',foot:'FOAMICO · SKU मूल्य सारांश · MRP (GST सहित) · गोपनीय',
-   placeholder:'जैसे\nUltima Premium 72x60\nरेस्टो लक्ज़री 75.5x67.5\nड्यूरो प्रीमियम 78x72 x3\nक्लाउड प्रो x4\nमैट्रेस प्रोटेक्टर x2',
-   thPill:'लाइन और पहचान',thQty:'मात्रा',thUnit:'प्रति नग MRP',thTotal:'लाइन कुल',
+   thPill:'उत्पाद',thQty:'मात्रा',thUnit:'प्रति नग MRP',thTotal:'लाइन कुल',
    grand:'कुल जोड़ (MRP, GST सहित)',item:'नग',items:'नग',priced:'की कीमत लगी',need:'में जानकारी चाहिए',
-   needTag:'जानकारी चाहिए',pillowTag:'तकिया',custom:'कस्टम',copied:'कॉपी हो गया ✓',
-   emptyStart:'आपका कीमत-सहित सारांश यहाँ दिखेगा।',emptyNone:'अभी कुछ नहीं है — ऊपर SKU लिखें और “कीमत निकालें” दबाएँ।',
-   cleared:'साफ़ हो गया। नई सूची डालकर कीमत निकालें।',
+   needTag:'जानकारी चाहिए',pillowTag:'तकिया',custom:'कस्टम',inches:'इंच',copied:'कॉपी हो गया ✓',
+   emptyStart:'आपका कीमत-सहित सारांश यहाँ दिखेगा।',emptyNone:'ऊपर प्रोडक्ट जोड़ें — यहाँ कीमत-सहित सारांश दिखेगा।',
+   cleared:'साफ़ हो गया।',
    calc:(a,b,si,sf,r,u)=>`${a}×${b} = ${inr(si)} वर्ग इंच ÷ 144 = ${sf.toFixed(2)} वर्ग फुट × ₹${inr(r)}/वर्ग फुट = ₹${inr(u)}`,
    msg:{noProduct:'प्रोडक्ट पहचान नहीं पाया। मॉडल नाम (रेस्टो, अल्टिमा…) या तकिया नाम (क्लाउड, मेमो-रेस्ट…) डालें।',
      noSize:'साइज़ नहीं मिला। जैसे 75x60 लिखें (कस्टम के लिए 75.5x67.5)।',
@@ -419,49 +464,89 @@ let LANG='en';
 
 /* ================= render ================= */
 function esc(s){return String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
-let lastRows=null;
+/* ===== builder state ===== */
+let items=[];
+function err(msg){document.getElementById('bErr').textContent=msg||'';}
+function clearErr(){document.getElementById('bErr').textContent='';}
 
+function buildModelSelect(){
+  const t=T[LANG],sel=document.getElementById('bModel'),prev=sel.value;
+  sel.innerHTML='';
+  const ph=document.createElement('option');ph.value='';ph.textContent=t.selModel;ph.disabled=true;ph.selected=true;sel.appendChild(ph);
+  const g1=document.createElement('optgroup');g1.label=t.grpMattress;
+  MODELS.forEach(m=>{const o=document.createElement('option');o.value='m:'+m;o.textContent=m;g1.appendChild(o);});
+  sel.appendChild(g1);
+  const g2=document.createElement('optgroup');g2.label=t.grpPillow;
+  PILLOWS.forEach((p,i)=>{const o=document.createElement('option');o.value='p:'+i;o.textContent=p.name;g2.appendChild(o);});
+  sel.appendChild(g2);
+  if(prev)sel.value=prev;
+}
+function buildThkSelect(modelName,keep){
+  const t=T[LANG],sel=document.getElementById('bThk');sel.innerHTML='';
+  const combos=COLS.map((x,i)=>({...x,i})).filter(x=>x.m===modelName);
+  if(combos.length!==1){const ph=document.createElement('option');ph.value='';ph.textContent=t.selThk;ph.disabled=true;ph.selected=true;sel.appendChild(ph);}
+  combos.forEach(c=>{const o=document.createElement('option');o.value=String(c.i);o.textContent=c.v+', '+c.t+' '+t.inches;sel.appendChild(o);});
+  if(keep)sel.value=keep;
+}
+function onModelChange(){
+  clearErr();
+  const v=document.getElementById('bModel').value;
+  const thk=document.getElementById('bThk'),size=document.getElementById('bSize');
+  if(v.slice(0,2)==='m:'){buildThkSelect(v.slice(2));thk.disabled=false;size.disabled=false;}
+  else if(v.slice(0,2)==='p:'){thk.innerHTML='<option>'+T[LANG].fixedPrice+'</option>';thk.disabled=true;size.disabled=true;size.value='';}
+  else{thk.innerHTML='';thk.disabled=true;size.disabled=true;}
+}
+
+function addItem(){
+  clearErr();
+  const t=T[LANG];
+  const mv=document.getElementById('bModel').value;
+  const qty=Math.max(1,Math.floor(+document.getElementById('bQty').value||1));
+  if(!mv)return err(t.errModel);
+  let item;
+  if(mv.slice(0,2)==='p:'){
+    const p=PILLOWS[+mv.slice(2)];
+    item={kind:'pillow',ok:true,name:p.name,cat:p.cat,qty,unit:p.mrp,total:p.mrp*qty};
+  }else{
+    const ci=document.getElementById('bThk').value;
+    if(ci==='')return err(t.errThk);
+    const sizeStr=document.getElementById('bSize').value.trim();
+    if(!sizeStr)return err(t.errSize);
+    const size=parseSize(normalize(sizeStr));
+    if(!size)return err(t.errSizeBad);
+    const col=COLS[+ci],key=stdKey(size.a,size.b);
+    if(key){const unit=PRICES[key][+ci];
+      item={kind:'mattress',ok:true,model:col.m,variant:col.v,thickness:col.t,sizeLabel:key.replace('x','×'),custom:false,qty,unit,total:unit*qty};}
+    else{const sqin=size.a*size.b,sqft=sqin/144,unit=Math.round(sqft*col.r);
+      item={kind:'mattress',ok:true,model:col.m,variant:col.v,thickness:col.t,sizeLabel:size.a+'×'+size.b,custom:true,rate:col.r,sqin,sqft,qty,unit,total:unit*qty};}
+  }
+  items.push(item);renderList();draw(items);
+  document.getElementById('bSize').value='';document.getElementById('bQty').value='1';
+  const sz=document.getElementById('bSize');if(!sz.disabled)sz.focus();
+}
+function renderList(){
+  const t=T[LANG],w=document.getElementById('listWrap');
+  if(!items.length){w.innerHTML='<div class="li-empty">'+t.listEmpty+'</div>';return;}
+  w.innerHTML=items.map((r,idx)=>{
+    const label=r.kind==='pillow'?r.name+' ('+r.cat+')':skuLabel(r,t.inches)+(r.custom?' · '+t.custom:'');
+    return '<div class="li-item"><div class="li-main"><span class="q">'+r.qty+'×</span>'+esc(label)+'</div>'+
+           '<button class="li-rm" data-idx="'+idx+'" aria-label="remove">✕</button></div>';
+  }).join('');
+  w.querySelectorAll('.li-rm').forEach(b=>b.addEventListener('click',()=>{items.splice(+b.dataset.idx,1);renderList();draw(items);}));
+}
 function applyLang(){
   const t=T[LANG];
   document.documentElement.lang=LANG;
   document.querySelectorAll('[data-i]').forEach(el=>{const k=el.getAttribute('data-i');if(t[k])el.textContent=t[k];});
-  document.getElementById('input').placeholder=t.placeholder;
   document.getElementById('en').classList.toggle('on',LANG==='en');
   document.getElementById('hi').classList.toggle('on',LANG==='hi');
-  // examples
-  const eg=document.getElementById('egchips');eg.innerHTML='';
-  t.egs.forEach(([label,val])=>{const c=document.createElement('span');c.className='chip';c.textContent=label;
-    c.addEventListener('click',()=>{document.getElementById('input').value=val;renderFrom(val);
-      const rc=document.getElementById('resultCard');window.scrollTo({top:rc.offsetTop-20,behavior:'smooth'});});
-    eg.appendChild(c);});
-  // re-render results in new language if present
-  if(lastRows)draw(lastRows);
-  else document.getElementById('output').innerHTML='<div class="empty">'+t.emptyStart+'</div>';
-}
-
-function renderFrom(text){lastRows=text.split('\n').filter(l=>l.trim().length).map(matchLine).filter(Boolean);draw(lastRows);}
-
-const PRODUCT_STARTS=[
-  'ecolite','signature','magic','maxa','duro','luma','resto','sova','ultima','riva','sofa','zero gravity',
-  'contour','slim','memo-rest','memo rest','memo-touch','memo touch','cloud pro','cloud','air soft','mattress protector',
-  'अल्टिमा','रेस्टो','लूमा','लुमा','सोवा','रीवा','रिवा','ड्यूरो','डुरो','मैक्सा','मेक्सा','सिग्नेचर','मैजिक',
-  'इकोलाइट','ज़ीरो ग्रैविटी','जीरो ग्रेविटी','कंटूर','स्लिम','मेमो रेस्ट','मेमो टच','क्लाउड प्रो','क्लाउड',
-  'एयर सॉफ्ट','मैट्रेस प्रोटेक्टर','प्रोटेक्टर'
-];
-function cleanVoiceText(text){
-  let cleaned=text.replace(/[।;]+/g,'\n').replace(/\s+(?:and\s+next|then|next|और\s+फिर|फिर|अगला|अगली)\s+/gi,'\n');
-  cleaned=cleaned.replace(/(?:^|\s)(?:please|okay|ok|haan|han|accha|achha|acha|जी|कृपया)(?=\s|$)/gi,' ');
-  const starts=PRODUCT_STARTS.map(x=>x.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('|');
-  cleaned=cleaned.replace(new RegExp('\\s+(?:and|और)\\s+(?=(?:'+starts+'))','gi'),'\n');
-  cleaned=cleaned.replace(new RegExp('\\s+(?=(?:'+starts+'))','gi'),'\n');
-  return cleaned.split('\n').map(line=>line.replace(/^[,\s]+|[,\s]+$/g,'').replace(/\s+/g,' '))
-    .filter(Boolean).join('\n');
-}
-
-function appendVoiceText(text){
-  const cleaned=cleanVoiceText(text);if(!cleaned)return false;
-  const current=input.value.trim();input.value=current?current+'\n'+cleaned:cleaned;
-  renderFrom(input.value);input.focus();input.setSelectionRange(input.value.length,input.value.length);return true;
+  document.getElementById('bSize').placeholder=t.sizePh;
+  const pm=document.getElementById('bModel').value,pt=document.getElementById('bThk').value;
+  buildModelSelect();
+  if(pm){document.getElementById('bModel').value=pm;
+    if(pm.slice(0,2)==='m:'){buildThkSelect(pm.slice(2),pt);document.getElementById('bThk').disabled=false;document.getElementById('bSize').disabled=false;}
+    else if(pm.slice(0,2)==='p:'){document.getElementById('bThk').innerHTML='<option>'+t.fixedPrice+'</option>';document.getElementById('bThk').disabled=true;document.getElementById('bSize').disabled=true;}}
+  renderList();draw(items);
 }
 
 function draw(rows){
@@ -472,15 +557,14 @@ function draw(rows){
     if(r.ok){
       grand+=r.total;items+=r.qty;let interp;
       if(r.kind==='pillow'){
-        interp='<span class="tag model">'+esc(r.name)+'</span><span class="tag spec">'+esc(r.cat)+
-               '</span><span class="tag spec">'+t.pillowTag+'</span>';
+        interp='<span class="skuline"><strong>'+esc(r.name)+'</strong> ('+esc(r.cat)+')</span>';
       }else{
-        interp='<span class="tag model">'+esc(r.model)+'</span><span class="tag spec">'+esc(r.variant)+
-               '</span><span class="tag spec">'+esc(thick(r.thickness))+'</span><span class="tag '+
-               (r.custom?'custom':'spec')+'">'+esc(r.sizeLabel)+(r.custom?' · '+t.custom:'')+'</span>';
+        interp='<span class="skuline"><strong>'+esc(r.model)+'</strong> '+
+               esc(r.variant+' '+r.sizeLabel+', '+r.thickness+' '+t.inches)+'</span>'+
+               (r.custom?'<span class="tag custom">'+t.custom+'</span>':'');
       }
       const note=r.custom?'<div class="note">'+esc(t.calc(r.sizeLabel.split('×')[0],r.sizeLabel.split('×')[1],r.sqin,r.sqft,r.rate,r.unit))+'</div>':'';
-      body+='<tr><td><div class="src">'+esc(r.src)+'</div><div class="tags">'+interp+'</div>'+note+'</td>'+
+      body+='<tr><td><div class="tags">'+interp+'</div>'+note+'</td>'+
             '<td class="num">'+r.qty+'</td><td class="num">₹'+inr(r.unit)+'</td>'+
             '<td class="num price-strong">₹'+inr(r.total)+'</td></tr>';
     }else{
@@ -503,7 +587,7 @@ function draw(rows){
   // plain text copy
   let txt=t.copyTitle+'\n\n';
   rows.forEach(r=>{if(r.ok){const d=r.kind==='pillow'?r.name+' ('+r.cat+')':
-      r.model+' '+r.variant+' '+thick(r.thickness)+' '+r.sizeLabel+(r.custom?' ['+t.custom+']':'');
+      skuLabel(r,t.inches)+(r.custom?' ['+t.custom+']':'');
     txt+=`${r.qty} × ${d}  @ ₹${inr(r.unit)}  = ₹${inr(r.total)}\n`;}
     else{const M=t.msg;let msg;
       if(r.msgKey==='ambiguous')msg=M.ambiguous(r.opts);
@@ -516,56 +600,18 @@ function draw(rows){
 }
 
 /* ================= wire ================= */
-const input=document.getElementById('input');
-const micBtn=document.getElementById('mic'),voiceStatus=document.getElementById('voiceStatus');
-const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
-let recognition=null,voiceParts=[],voiceActive=false;
-
-function setVoiceState(state,message){
-  voiceActive=state==='listening';micBtn.classList.toggle('listening',voiceActive);
-  micBtn.setAttribute('aria-pressed',String(voiceActive));micBtn.querySelector('span').textContent=voiceActive?T[LANG].stopListening:T[LANG].speak;
-  voiceStatus.className='voice-status'+(state==='listening'?' active':state==='error'?' error':'');
-  voiceStatus.textContent=message||'';
-}
-
-if(!SpeechRecognition){micBtn.disabled=true;setVoiceState('error',T[LANG].voiceUnsupported);}
-else{
-  recognition=new SpeechRecognition();recognition.continuous=true;recognition.interimResults=true;recognition.maxAlternatives=1;
-  recognition.lang='en-IN';
-  recognition.onstart=()=>{voiceParts=[];setVoiceState('listening',T[LANG].listening);};
-  recognition.onresult=event=>{
-    for(let i=event.resultIndex;i<event.results.length;i++)if(event.results[i].isFinal)voiceParts.push(event.results[i][0].transcript.trim());
-  };
-  recognition.onerror=event=>{
-    const denied=event.error==='not-allowed'||event.error==='service-not-allowed';
-    setVoiceState('error',denied?T[LANG].voiceDenied:T[LANG].voiceError);
-  };
-  recognition.onend=()=>{
-    const wasListening=voiceActive;
-    if(wasListening)setVoiceState('processing',T[LANG].processingVoice);
-    const added=appendVoiceText(voiceParts.join(' '));voiceParts=[];
-    if(added)setVoiceState('ready',T[LANG].voiceReady);
-    else if(wasListening)setVoiceState('error',T[LANG].voiceError);
-    voiceActive=false;
-  };
-  micBtn.addEventListener('click',()=>{
-    if(voiceActive){setVoiceState('processing',T[LANG].processingVoice);recognition.stop();return;}
-    try{recognition.start();}catch(e){setVoiceState('error',T[LANG].voiceError);}
-  });
-}
-document.getElementById('run').addEventListener('click',()=>renderFrom(input.value));
-document.getElementById('clear').addEventListener('click',()=>{input.value='';lastRows=null;
-  if(voiceActive)recognition.stop();voiceParts=[];setVoiceState('idle','');
-  document.getElementById('output').innerHTML='<div class="empty">'+T[LANG].cleared+'</div>';
-  document.getElementById('copy').classList.add('hidden');input.focus();});
+document.getElementById('bModel').addEventListener('change',onModelChange);
+document.getElementById('bAdd').addEventListener('click',addItem);
+document.getElementById('bSize').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();addItem();}});
+document.getElementById('bQty').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();addItem();}});
+document.getElementById('clear').addEventListener('click',()=>{
+  items=[];renderList();draw(items);clearErr();
+  document.getElementById('bSize').value='';document.getElementById('bQty').value='1';
+});
 document.getElementById('copy').addEventListener('click',e=>{const b=e.currentTarget;
-  navigator.clipboard.writeText(b.dataset.txt||'').then(()=>{const o=b.textContent;b.textContent=T[LANG].copied;
+  navigator.clipboard.writeText(b.dataset.txt||'').then(()=>{b.textContent=T[LANG].copied;
     setTimeout(()=>b.textContent=T[LANG].copy,1400);});});
-function changeLanguage(lang){
-  LANG=lang;applyLang();
-  if(!SpeechRecognition)setVoiceState('error',T[LANG].voiceUnsupported);
-  else setVoiceState(voiceActive?'listening':'idle',voiceActive?T[LANG].listening:'');
-}
+function changeLanguage(lang){LANG=lang;applyLang();}
 document.getElementById('en').addEventListener('click',()=>changeLanguage('en'));
 document.getElementById('hi').addEventListener('click',()=>changeLanguage('hi'));
 
